@@ -1,7 +1,6 @@
 # CastLens — casting defect inspection
 
 **Live demo:** <https://castlens.onrender.com/>  
-**Repository:** <https://github.com/thenun123/Castlens>
 
 > The demo runs on Render's free plan, which sleeps after about 15 minutes without traffic. If the page is slow to open, wait up to a minute for it to wake.
 
