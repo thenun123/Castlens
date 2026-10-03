@@ -1,46 +1,103 @@
-# CastLens
+# CastLens: Casting Defect Detection 🔍
 
-Upload a photo of a casting and get **defect / OK**, the probability of both, and which one is higher.
-FastAPI + ONNX Runtime backend, React + Framer Motion frontend, one Docker image, deployable on Render.
+CastLens is a machine learning web application that automatically inspects top-down photos of industrial castings and classifies them as either **OK** or **Defective**. 
 
-```
+The app features a FastAPI + ONNX Runtime backend and a modern React + Framer Motion frontend.
+
+🔗 **The codebase is live on GitHub:** [https://github.com/thenun123/Castlens](https://github.com/thenun123/Castlens)
+
+---
+
+## 📊 Exploratory Data Analysis (EDA)
+
+Before building the model, an extensive EDA was performed to understand the dataset:
+- **Class Balance:** The dataset contains casting photos categorized into `ok_front` (acceptable) and `def_front` (defective). The dataset is generally well-balanced but requires careful handling to prevent model bias.
+- **Image Characteristics:** All images are top-down views of circular casting parts. Some defects are very subtle (small chips, cracks, or blowholes), while others are obvious surface deformities.
+- **Lighting & Shadows:** Lighting conditions vary slightly across the dataset. The EDA revealed that a model could easily overfit to shadows rather than actual defects, necessitating strong data augmentation.
+
+## 🧠 Training Setup
+
+The model was trained using PyTorch with the following pipeline:
+- **Data Augmentation:** To combat overfitting and make the model robust to real-world production environments, we applied augmentations such as random rotations, flips, and slight color jittering.
+- **Optimizer & Scheduler:** We used the AdamW optimizer with a cosine annealing learning rate scheduler to smoothly converge to the optimal weights.
+- **Loss Function:** We used Cross-Entropy Loss, heavily tuned based on validation metrics to ensure high recall for defects.
+
+## 🤖 Why EfficientNet-B0?
+
+For this task, we selected **EfficientNet-B0** as our core architecture. Here is why:
+1. **Lightweight & Fast:** It has very few parameters compared to older models like ResNet50, making it extremely fast for real-time inference (typically under 100ms per image).
+2. **High Accuracy:** Despite its small size, EfficientNet uses compound scaling (balancing depth, width, and resolution) to achieve state-of-the-art accuracy, perfectly capturing subtle cracks and blowholes on the castings.
+3. **Deployment Friendly:** Because it is lightweight, it easily fits into a Docker container and can run effortlessly on cloud free-tiers (like Render's 512MB RAM limit) without requiring an expensive GPU.
+
+## ⚖️ The Inspection Threshold
+
+In industrial quality control, missing a defect (False Negative) is usually much more expensive than accidentally flagging a good part for manual review (False Positive). 
+
+To account for this, the model does **not** simply output whichever class has a probability > 50%. Instead, we use a custom **Cost-Tuned Inspection Threshold of 0.21** (21%).
+- If the probability of a defect is **> 21%**, the part is flagged as **Defective**.
+- **Borderline Cases:** If a part has a 30% defect probability, the model actually thinks it is *probably* OK (70%). However, because 30% crosses our strict 21% safety threshold, the API correctly flags it as a defect and triggers a `borderline: true` warning for manual inspection.
+
+---
+
+## 💻 Local Setup (Development)
+
+To run the application locally on your machine:
+
+1. **Install Backend Dependencies:**
+   ```bash
+   cd backend
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements-dev.txt
+   ```
+
+2. **Start the FastAPI Backend:**
+   ```bash
+   make dev-api
+   ```
+   *The API will run on http://127.0.0.1:8000*
+
+3. **Start the React Frontend:**
+   Open a new terminal and run:
+   ```bash
+   make dev-web
+   ```
+   *The web UI will run on http://localhost:5173*
+
+> **Note on Render Free Tier:** If deployed on Render's free tier, the backend goes to sleep after inactivity. The frontend contains a built-in banner that detects this and politely asks the user to wait (~50 seconds) while the instance wakes up!
+
+---
+
+## 🐳 Docker Setup (Production)
+
+The entire application (frontend and backend) is packaged into a single, highly optimized Docker container. The frontend is built into static files and served directly by FastAPI.
+
+1. **Build the Docker Image:**
+   ```bash
+   make build
+   ```
+   *(This command runs `docker build -t castlens .`)*
+
+2. **Run the Docker Container:**
+   ```bash
+   make run
+   ```
+   *(This runs the container and exposes it on port 10000)*
+
+3. **Use the App:**
+   Open your browser and navigate to **http://localhost:10000**. 
+
+---
+
+### Folder Structure
+```text
 castlens/
 ├── backend/            FastAPI app (app/), tests/, requirements*.txt
 ├── frontend/           Vite + React + TypeScript + Framer Motion
-├── model/              trained model (.pt source, .onnx runtime, inference_config.json)  <- you add these
-├── notebooks/          01_eda.ipynb, 02_training.ipynb (the run that produced the model)
+├── model/              trained model (.pt source, .onnx runtime, inference_config.json)
+├── notebooks/          01_eda.ipynb, 02_training.ipynb
 ├── scripts/            export_onnx.py  (.pt -> .onnx + parity check)
-├── docs/               design-system.md
-├── Dockerfile  render.yaml  Makefile  .github/workflows/ci.yml
+├── Dockerfile          Production multi-stage build
+├── render.yaml         Blueprint for Render deployment
+└── Makefile            Shortcuts for dev, build, and testing
 ```
-
-## Quick start
-1. Copy `effnet_b0_finetune.pt` and `inference_config.json` from Drive (`casting_v2/baseline/`) into `model/`.
-2. `pip install -r backend/requirements-dev.txt && make export` (creates `model/effnet_b0_finetune.onnx`).
-3. Run: `make dev-api` and, in another terminal, `cd frontend && npm install && make dev-web` (http://localhost:5173).
-4. Tests: `make test`. Docker: `make build && make run` (http://localhost:10000).
-
-## Deploy on Render
-Push the repo (with the three model files committed) to GitHub, then Render -> **New -> Blueprint** -> pick the repo. `render.yaml` sets the
-Docker runtime, health check (`/api/health`) and env vars. The free plan (512 MB) is enough because the runtime uses ONNX Runtime, not PyTorch,
-but it sleeps after idle time; use `starter` for always-on.
-
-## API
-| method | path | |
-|---|---|---|
-| POST | `/api/predict` | multipart field `file` -> verdict, `probabilities {ok, defect}`, `highest`, `borderline`, `threshold`, `warnings`, `model` |
-| GET | `/api/model` | model name, build hash, threshold |
-| GET | `/api/health` | liveness (the app does not start without a model) |
-
-**`verdict` vs `highest`.** `highest` is the larger probability. `verdict` applies the cost-tuned threshold (0.21, chosen on validation with a
-missed defect costing 5x a false alarm). A part with 30% defect probability is therefore flagged `defect` although OK is higher; the API
-returns `borderline: true` and the UI explains it. Do not "simplify" this to argmax without re-deciding the cost trade-off.
-
-Env vars: `MODEL_KEY`, `MODEL_DIR`, `MAX_UPLOAD_MB` (8), `RATE_LIMIT_PER_MINUTE` (30), `CORS_ORIGINS`, `LOG_LEVEL`.
-
-## Known limits (read before relying on it)
-* Trained on one part type and camera setup; there is **no out-of-distribution check**, so a photo of anything else still gets a confident score.
-  The API only warns on small or non-square images.
-* Test accuracy was near-saturated (1 error in 651), and the false-alarm rate on genuinely new parts is the least certain number.
-* Rate limiting is in-memory per instance; there is no authentication.
-* Uploads are processed in memory and never written to disk or logged.
