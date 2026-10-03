@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: castlens
+    runtime: docker
+    plan: free            # free = 512 MB RAM and sleeps after ~15 min idle; use `starter` to avoid cold starts
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: MODEL_KEY
+        value: effnet_b0_finetune
+      - key: MAX_UPLOAD_MB
+        value: "8"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "30"

@@ -1,0 +1,37 @@
+{
+  "class_to_idx": {
+    "ok_front": 0,
+    "def_front": 1
+  },
+  "positive_class": "def_front",
+  "img_size": 224,
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "normalize_brightness": false,
+  "train_mean_luminance": 144.0068817138672,
+  "cost_fn": 5.0,
+  "cost_fp": 1.0,
+  "models": {
+    "custom_cnn": {
+      "checkpoint": "custom_cnn.pt",
+      "threshold": 0.1
+    },
+    "effnet_b0_finetune": {
+      "checkpoint": "effnet_b0_finetune.pt",
+      "threshold": 0.21
+    },
+    "effnet_b1_frozen": {
+      "checkpoint": "effnet_b1_frozen.pt",
+      "threshold": 0.41000000000000003
+    }
+  },
+  "recommended": "custom_cnn"
+}
